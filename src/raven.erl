@@ -39,7 +39,7 @@ capture(Message, Params) ->
 capture_prepare(Message, Params) ->
 	Cfg = get_config(),
 	Document = [
-		{event_id, event_id_i()},
+		{event_id, uuid_v7()},
 		{project, unicode:characters_to_binary(Cfg#cfg.project)},
 		{platform, erlang},
 		{server_name, node()},
@@ -105,10 +105,10 @@ capture_with_backoff_send(Body) ->
 	{ok, extract_backoff(Result)}.
 
 extract_backoff({StatusLine, Headers, _Body}) ->
-	{_,ResponseCode, _} = StatusLine,
+	{_, ResponseCode, _} = StatusLine,
 	case ResponseCode of
-		429 -> list_to_integer(proplists:get_value("retry-after", Headers));
-		200 -> 0
+		200 -> 0;
+		429 -> list_to_integer(proplists:get_value("retry-after", Headers))
 	end.
 
 -spec user_agent() -> iolist().
@@ -151,15 +151,13 @@ get_config(App) ->
 			     release = Release}
 	end.
 
-
-event_id_i() ->
-	U0 = rand:uniform((2 bsl 32) - 1) - 1,
-	U1 = rand:uniform((2 bsl 16) - 1) - 1,
-	U2 = rand:uniform((2 bsl 12) - 1) - 1,
-	U3 = rand:uniform((2 bsl 32) - 1) - 1,
-	U4 = rand:uniform((2 bsl 30) - 1) - 1,
-	<<UUID:128>> = <<U0:32, U1:16, 4:4, U2:12, 2#10:2, U3:32, U4:30>>,
-	iolist_to_binary(io_lib:format("~32.16.0b", [UUID])).
+uuid_v7() ->
+	TS = erlang:system_time(millisecond),
+	<<RandA:12/bitstring, RandB:62/bitstring, _/bitstring>> = rand:bytes(10),
+	Ver = 7,
+	Var = 2#10,
+	Bin = <<TS:48, Ver:4, RandA/bitstring, Var:2, RandB/bitstring>>,
+	binary:encode_hex(Bin, lowercase).
 
 timestamp_i() ->
 	{{Y,Mo,D}, {H,Mn,S}} = calendar:now_to_datetime(os:timestamp()),
